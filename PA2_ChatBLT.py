@@ -7,9 +7,9 @@ module_name = 'spam_detection'
 Version: v0.1
 Description:
 Authors:
-<Your Name>
+Rhett Hill, Zachary Gros
 Date Created : 02-26-2025
-Date Last Updated: 03-21-2025
+Date Last Updated: 03-27-2025
 Doc:
 This module loads email data, preprocesses it, and extracts features.
 '''
@@ -115,17 +115,12 @@ def main():
 
     df = pd.DataFrame(email_data, columns=["SAMPLE ID", "TARGET", "TEXT"])
     df.to_csv("data_raw.csv", index=False)
-    
-    plot_text(df, "RAW")
-    
+
     # Preprocess text
     vectorizer = CountVectorizer(max_features=1000)
     df["TEXT"] = df["TEXT"].apply(preprocess_text)
     df.to_csv("data_preprocessed.csv", index=False)
     print("Preprocessing complete. Data saved as 'data_preprocessed.csv'.")
-    
-    plot_text(df, "PREPROCESSED")
-    plot_text(df, "PREPROCESSED_MINMAX")
     
     # Convert text into numerical features (TF-IDF)
     print("Extracting features...")

@@ -7,9 +7,9 @@ module_name = 'spam_detection'
 Version: v0.1
 Description:
 Authors:
-<Your Name>
+Rhett Hill, Zachary Gros
 Date Created : 02-26-2025
-Date Last Updated: 03-21-2025
+Date Last Updated: 03-27-2025
 Doc:
 This module loads email data, preprocesses it, and extracts features.
 '''
@@ -92,19 +92,6 @@ def plot_text(X, t):
     plt.show()   
 #
 
-def plot_pca(X, y):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=y,  alpha=0.7)
-    plt.title("PCA Projection of Emails")
-    plt.xlabel("Principal Component 1")
-    plt.ylabel("Principal Component 2")
-    plt.legend(title="Class")
-    plt.show()
-#
-
 #%% MAIN CODE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def main():
     '''
@@ -126,22 +113,7 @@ def main():
     
     plot_text(df, "PREPROCESSED")
     plot_text(df, "PREPROCESSED_MINMAX")
-    
-    # Convert text into numerical features (TF-IDF)
-    print("Extracting features...")
-    vectorizer = TfidfVectorizer(max_features=1000)  # Limit to 1000 most important 
-    features = vectorizer.fit_transform(df["TEXT"]).toarray()
-    
-    feature_names = vectorizer.get_feature_names_out()
-    df_features = pd.DataFrame(features, columns=feature_names)
-    
-    final_df = pd.concat([df[["SAMPLE ID", "TARGET"]], df_features], axis=1)
-    
-    final_df.to_csv("data_features.csv", index=False)
-    print("Feature extraction complete. Data saved as 'data_features.csv'.")
-    
-    #plots the data in 2d visualization
-    plot_pca(features, df["TARGET"])
+#
 
 #%% SELF-RUN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
