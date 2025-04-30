@@ -26,7 +26,7 @@ import seaborn as sns
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 #%% CONSTANTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-DATA_PATH = "Data/enron2" #Change enron 1-6 to process different dataset
+DATA_PATH = "Data/enron1" #Change enron 1-6 to process different dataset
 
 #%% INITIALIZATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 email_data = []  # To store extracted emails and labels
@@ -106,6 +106,7 @@ def main():
     
     final_df = pd.concat([df[["SAMPLE ID", "TARGET"]], df_features], axis=1)
     
+    final_df.to_csv("processed_emails.csv", index=False)
     final_df.to_excel("processed_emails.xlsx", index=False)
     print("Preprocessing complete. Data saved as 'processed_emails.xlsx'.")
     
