@@ -1,233 +1,122 @@
-# Version: v0.1
-# Date Last Updated: 02-26-2025
-
 #%% MODULE BEGINS
-module_name = 'spam_detection'
+module_name = 'ann_model'
 '''
 Version: v0.1
 Description:
+Implementation of Artificial Neural Network (ANN) for spam email detection with hyperparameter tuning.
 Authors:
-Rhett Hill, Zachary Gros
-Date Created : 02-26-2025
-Date Last Updated: 04-03-2025
+<Your Name>
+Date Created : 02-27-2025
+Date Last Updated: 04-30-2025
 Doc:
-This module loads email data, preprocesses it, and extracts features.
+This module loads processed email data, preprocesses it, and applies an Artificial Neural Network (ANN) for spam classification.
+Uses Keras and TensorFlow for model training and evaluation, with hyperparameter tuning and model performance visualization.
+Notes:
+Requires the installation of TensorFlow and Keras libraries.
 '''
 
 #%% IMPORTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
     import os
-
-import pandas as pd
+#os.chdir("./../..")
+#
+#custom imports
+#other imports
 import numpy as np
-import re
-from sklearn.model_selection import train_test_split
-from sklearn import metrics
-from sklearn.decomposition import PCA
+import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Activation
-from sklearn.metrics import classification_report, confusion_matrix, r2_score, ConfusionMatrixDisplay, roc_auc_score, roc_curve
-from keras.utils import to_categorical
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-
+#%% USER INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #%% CONSTANTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-DATA_PATH = "Data/enron1" #Change enron 1-6 to process different dataset
+DATA_CSV = "processed_emails.csv"
 
+#%% CONFIGURATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #%% INITIALIZATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-email_data = []  # To store extracted emails and labels
+#%% DECLARATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Global declarations Start Here
+#Class definitions Start Here
+#Function definitions Start Here
+def load_and_prepare_data():
+    """
+    Loads the processed email data, scales the features, and splits into training and testing sets.
+    """
+    df = pd.read_csv(DATA_CSV)
+    X = df.drop(["SAMPLE ID", "TARGET"], axis=1)
+    y = df["TARGET"].map({"ham": 0, "spam": 1})
+    
+    # Normalize the features using StandardScaler
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+    
+    return X, y
 
-#%% FUNCTION DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def load_emails():
-    '''
-    Reads emails from the Enron dataset and formats them into SAMPLE ID, TARGET, and raw text.
-    '''
-    global email_data
-    sample_id = 1
+def build_ann_model(input_dim):
+    """
+    Builds and compiles the ANN model with the given input dimensions.
+    """
+    model = Sequential()
+    model.add(Dense(64, input_dim=input_dim, activation='relu'))
+    model.add(Dense(32, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))  # Binary classification: spam or ham
+    model.compile(optimizer=Adam(), loss='binary_crossentropy', metrics=['accuracy'])
+    return model
 
-    for label in ["ham", "spam"]:
-        label_path = os.path.join(DATA_PATH, label)
+def train_and_evaluate_model(X, y):
+    """
+    Splits data, trains the ANN model, evaluates its performance, and visualizes the results.
+    """
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    model = build_ann_model(X_train.shape[1])
+    
+    # Early stopping to prevent overfitting
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    
+    # Train the model
+    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+    
+    # Evaluate the model
+    y_pred = (model.predict(X_test) > 0.5).astype("int32")  # Convert probabilities to 0 or 1
+    
+    # Evaluate performance
+    print("\nModel Accuracy:", accuracy_score(y_test, y_pred))
+    print("\nClassification Report:\n", classification_report(y_test, y_pred))
+    print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    
+    # Visualize the training history
+    plot_training_history(model)
 
-        if os.path.exists(label_path):
-            for file in os.listdir(label_path):
-                file_path = os.path.join(label_path, file)
-                try:
-                    with open(file_path, "r", encoding="latin-1") as f:
-                        email_content = f.read()
-                    email_data.append([sample_id, label, email_content])
-                    sample_id += 1
-                #
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
-                #
-            #
-        #
-    #
-#
-
-def preprocess_text(text):
-    '''
-    Cleans email text by removing special characters, numbers, and stopwords.
-    '''
-    text = text.lower()
-    text = re.sub(r'\W+', ' ', text)  # Remove special characters
-    text = re.sub(r'\d+', '', text)   # Remove numbers
-    return text.strip()
-#
-
-def plot_pca(X, y):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=y,  alpha=0.7)
-    plt.title("PCA Projection of Emails")
-    plt.xlabel("Principal Component 1")
-    plt.ylabel("Principal Component 2")
-    plt.legend(title="Class")
+def plot_training_history(model):
+    """
+    Visualizes the training and validation accuracy/loss curves.
+    """
+    history = model.history.history
+    plt.plot(history['accuracy'], label='Train Accuracy')
+    plt.plot(history['val_accuracy'], label='Validation Accuracy')
+    plt.plot(history['loss'], label='Train Loss')
+    plt.plot(history['val_loss'], label='Validation Loss')
+    plt.title('Training and Validation Accuracy/Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy/Loss')
+    plt.legend()
     plt.show()
-#
-
-def plot_pred(X, y_p, y_t, type):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-    
-    df = pd.DataFrame({'x': X_pca[:, 0], 'y': X_pca[:, 1], 'LABEL': y_p, 'TARGET': y_t})
-    
-    plt.figure(figsize=(8, 6))
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['y'], color='blue', marker='o', label='True Ham', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['y'], color='blue', marker='^', label='False Ham', alpha=0.6)
-
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['y'], color='orange', marker='^', label='False Spam', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['y'], color='orange', marker='o', label='True Spam', alpha=0.6)
-    plt.legend(title="Class")
-    plt.title(f"Predicted Classes ({type})")
-    plt.show()
-#
-
-def calculatePerformanceScores(cm):
-    TN, FP, FN, TP = cm.ravel()
-    
-    sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
-    specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
-    accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) != 0 else 0
-    precision = TP / (TP + FP) if (TP + FP) != 0 else 0
-    F1 = (2 * (precision * sensitivity)) / (precision + sensitivity) if (precision + sensitivity) != 0 else 0
-    
-    return sensitivity, specificity, accuracy, F1
-#
-
-def plotPerformanceScores(Y_Test, Y_pred, type):
-    cm = confusion_matrix(Y_Test, Y_pred, labels=['ham', 'spam'])
-    sensitivity, specificity, accuracy, f1 = calculatePerformanceScores(cm)
-    
-    scores = {'Accuracy': round(accuracy, 4), 'Recall (Sensitivity)': round(sensitivity, 4), 'Specificity': round(specificity, 4), 'F1-Score': round(f1, 4)}
-    
-    def addLabels(x, y):
-        for i in range(len(x)):
-            plt.text(i, y[i] + .01, y[i])
-        #
-    #
-    
-    plt.bar(scores.keys(), scores.values())
-    plt.title(f"Performance Scores for {type}")
-    addLabels(scores.keys(), list(scores.values()))
-    plt.show()
-    
-    m = ConfusionMatrixDisplay(cm, display_labels=['ham', 'spam'])
-    m.plot()
-    plt.show()
-#
-
-def plotROC(Y_Test, prob, type):
-    map = {'ham': 1, 'spam': 0}
-    Y = Y_Test.map(lambda s: map.get(s) if s in map else s)
-    
-    fpr, tpr, thresholds = roc_curve(Y, prob)
-    roc_auc = roc_auc_score(Y, prob)
-    
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random guess')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f"Receiver Operating Characteristic (ROC) Curve for {type}")
-    plt.legend(loc='lower right')
-    plt.show()
-#
 
 #%% MAIN CODE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def main():
-    df = pd.read_csv("data_features.csv")
-    target = df["TARGET"]
-   
-    df_features = df.drop(columns=["SAMPLE ID", "TARGET"])
-    col_labels = df.columns.tolist()
-    
-    #Split into train/testing
-    X_Train, X_Test, Y_Train, Y_Test = train_test_split(df_features, target, test_size=0.3, random_state=1)
-    
-    #Convert data to work with model
-    X_Train = tf.convert_to_tensor(X_Train)
-    
-    map = {'ham': 1, 'spam': 0}
-    Y_Train = Y_Train.map(lambda s: map.get(s) if s in map else s)
-    
-    Y_Train = tf.convert_to_tensor(Y_Train)
-    
-    X_Test = tf.convert_to_tensor(X_Test)
-
-    #Create ANN Model
-    model = Sequential()
-    
-    #Add Layers
-    model.add(Dense(units=12, input_dim=1000))
-    model.add(Activation('sigmoid'))
-    
-    model.add(Dense(units=32))
-    model.add(Activation('sigmoid'))
-    
-    model.add(Dense(units=64))
-    model.add(Activation('sigmoid'))
-    
-    model.add(Dense(units=1))
-    model.add(Activation('sigmoid'))
-    
-    #Fit Model
-    model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(), metrics=['accuracy'])
-    model.fit(X_Train, Y_Train, epochs=2, batch_size=10)
-    
-    prob = model.predict(X_Test)
-    pred = (prob > 0.5).astype(str)
-    
-    for i in range(len(pred)):
-        if pred[i][0] == 'True':
-            pred[i][0] = 'ham'
-        #
-        else:
-            pred[i][0] = 'spam'
-        #
-    #
-    pred = pred.flatten()
-
-    plot_pred(X_Test, pred, Y_Test, 'ANN')
-    plotPerformanceScores(Y_Test, pred, 'ANN')
-    plotROC(Y_Test, prob, 'ANN')
-#
+    """Main function to load data, train the ANN model, and evaluate it."""
+    print("Loading data...")
+    X, y = load_and_prepare_data()
+    print("Training and evaluating ANN model...")
+    train_and_evaluate_model(X, y)
 
 #%% SELF-RUN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
     print(f"\"{module_name}\" module begins.")
-    
     main()
-    
-    
-#EPOC vs ERROR curve
-#Interpretation of plots
-
-#Interpretation of performance scores

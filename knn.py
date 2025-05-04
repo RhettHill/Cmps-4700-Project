@@ -1,218 +1,156 @@
-# Version: v0.1
-# Date Last Updated: 02-26-2025
-
 #%% MODULE BEGINS
-module_name = 'spam_detection'
+module_name = 'knn_model'
 '''
-Version: v0.1
+Version: 1.1
 Description:
+Implementation of K-Nearest Neighbors (KNN) for spam email detection with hyperparameter tuning.
 Authors:
-Rhett Hill, Zachary Gros
-Date Created : 02-26-2025
-Date Last Updated: 04-03-2025
+<Your Name>
+Date Created : <Date>
+Date Last Updated: <Date>
 Doc:
-This module loads email data, preprocesses it, and extracts features.
+This module loads processed email data, preprocesses it, and applies KNN with GridSearchCV to find the best k.
+Notes:
+Uses scikit-learn for model training and evaluation, logging for progress tracking.
 '''
 
 #%% IMPORTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
     import os
-
+#os.chdir("./../..")
+#
+#custom imports
+#other imports
+import logging
 import pandas as pd
-import re
-from sklearn import metrics
-from sklearn.decomposition import PCA
+import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import StandardScaler
 
-from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay, roc_curve, roc_auc_score
-
+#%% USER INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #%% CONSTANTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-DATA_PATH = "Data/enron1" #Change enron 1-6 to process different dataset
+
+#%% CONFIGURATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 #%% INITIALIZATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-email_data = []  # To store extracted emails and labels
+#%% DECLARATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Global declarations Start Here
+#Class definitions Start Here
+#Function definitions Start Here
+def load_and_prepare_data():
+    logging.info("Starting to load and prepare data...")
+    DATA_CSV = "OUTPUT/data_features.csv"
 
-#%% FUNCTION DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def load_emails():
-    '''
-    Reads emails from the Enron dataset and formats them into SAMPLE ID, TARGET, and raw text.
-    '''
-    global email_data
-    sample_id = 1
-
-    for label in ["ham", "spam"]:
-        label_path = os.path.join(DATA_PATH, label)
-
-        if os.path.exists(label_path):
-            for file in os.listdir(label_path):
-                file_path = os.path.join(label_path, file)
-                try:
-                    with open(file_path, "r", encoding="latin-1") as f:
-                        email_content = f.read()
-                    email_data.append([sample_id, label, email_content])
-                    sample_id += 1
-                #
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
-                #
-            #
-        #
-    #
-#
-
-def preprocess_text(text):
-    '''
-    Cleans email text by removing special characters, numbers, and stopwords.
-    '''
-    text = text.lower()
-    text = re.sub(r'\W+', ' ', text)  # Remove special characters
-    text = re.sub(r'\d+', '', text)   # Remove numbers
-    return text.strip()
-#
-
-def plot_pca(X, y):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=y,  alpha=0.7)
-    plt.title("PCA Projection of Emails")
-    plt.xlabel("Principal Component 1")
-    plt.ylabel("Principal Component 2")
-    plt.legend(title="Class")
-    plt.show()
-#
-
-def plot_pred(X, y_p, y_t, type):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-    
-    df = pd.DataFrame({'x': X_pca[:, 0], 'y': X_pca[:, 1], 'LABEL': y_p, 'TARGET': y_t})
-    
-    plt.figure(figsize=(8, 6))
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['y'], color='blue', marker='o', label='True Ham', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['y'], color='blue', marker='^', label='False Ham', alpha=0.6)
-
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['y'], color='orange', marker='^', label='False Spam', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['y'], color='orange', marker='o', label='True Spam', alpha=0.6)
-    plt.legend(title="Class")
-    plt.title(f"Predicted Classes ({type})")
-    plt.show()
-#
-
-def splitData(features, target, ratio=(0.6, 0.2, 0.2)):
-    trRatio, vRatio, tsRatio = ratio
-    
-    X_Train, X_Temp, Y_Train, Y_Temp = train_test_split(features, target, test_size=(1 - trRatio), random_state=1)
-    X_Val, X_Test, Y_Val, Y_Test = train_test_split(X_Temp, Y_Temp, test_size=tsRatio, random_state=1)
-
-    return X_Train, Y_Train, X_Val, Y_Val, X_Test, Y_Test
-#
-
-def getBestK(X_Train, Y_Train, X_Val, Y_Val):
-    best_k = 1
-    best_acc = 0
-    
-    for k in range(1, len(X_Train)):
-        model = KNeighborsClassifier(n_neighbors=k)
-        model.fit(X_Train.values, Y_Train)
-        y_pred = model.predict(X_Val.values)
+    try:
+        df = pd.read_csv(DATA_CSV)
+        X = df.drop(["SAMPLE ID", "TARGET"], axis=1)
+        y = df["TARGET"].map({"ham": 0, "spam": 1})
         
-        #Check Accuracy
-        accuracy = metrics.accuracy_score(Y_Val, y_pred) 
-        #Compare Accuracies
-        if accuracy > best_acc:
-            best_acc = accuracy
-            best_k = k
-        #  
-    #
-    print("Best K: " + str(best_k))
-    return best_k
-#
+        # Normalize features
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X)
+        logging.info("Data loaded and preprocessed successfully.")
+        return X, y
+    except FileNotFoundError:
+        logging.error(f"Error: The file {DATA_CSV} was not found.")
+        exit(1)
+    except Exception as e:
+        logging.error(f"Unexpected error loading data: {e}")
+        exit(1)
 
-def calculatePerformanceScores(cm):
-    TN, FP, FN, TP = cm.ravel()
-    
-    sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
-    specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
-    accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) != 0 else 0
-    precision = TP / (TP + FP) if (TP + FP) != 0 else 0
-    F1 = (2 * (precision * sensitivity)) / (precision + sensitivity) if (precision + sensitivity) != 0 else 0
-    
-    return sensitivity, specificity, accuracy, F1
-#
 
-def plotPerformanceScores(Y_Test, Y_pred, type):
-    cm = confusion_matrix(Y_Test, Y_pred, labels=['ham', 'spam'])
-    sensitivity, specificity, accuracy, f1 = calculatePerformanceScores(cm)
-    
-    scores = {'Accuracy': round(accuracy, 4), 'Recall (Sensitivity)': round(sensitivity, 4), 'Specificity': round(specificity, 4), 'F1-Score': round(f1, 4)}
-    
-    def addLabels(x, y):
-        for i in range(len(x)):
-            plt.text(i, y[i] + .01, y[i])
-        #
-    #
-    
-    plt.bar(scores.keys(), scores.values())
-    plt.title(f"Performance Scores for {type}")
-    addLabels(scores.keys(), list(scores.values()))
-    plt.show()
-    
-    m = ConfusionMatrixDisplay(cm, display_labels=['ham', 'spam'])
-    m.plot()
-    plt.show()
-#
+def train_and_evaluate_model(X, y):
+    """
+    Splits the data, finds the best k using GridSearchCV,
+    trains the best model, and evaluates its performance.
+    """
+    # Split data into training (60%), validation (20%), and test (20%) sets
+    X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.4, random_state=42)
+    X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
-def plotROC(Y_Test, prob, type):
-    map = {'ham': 1, 'spam': 0}
-    Y = Y_Test.map(lambda s: map.get(s) if s in map else s)
+    # Hyperparameter tuning for best k
+    param_grid = {'n_neighbors': np.arange(1, 31, 2)}
+    grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=5, scoring='accuracy')
+    grid_search.fit(X_train, y_train)
     
-    fpr, tpr, thresholds = roc_curve(Y, prob)
-    roc_auc = roc_auc_score(Y, prob)
+    best_k = grid_search.best_params_['n_neighbors']
+    logging.info(f"Best k found: {best_k} with accuracy: {grid_search.best_score_:.4f}")
     
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random guess')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f"Receiver Operating Characteristic (ROC) Curve for {type}")
-    plt.legend(loc='lower right')
+    # Train final model with best k
+    knn_model = KNeighborsClassifier(n_neighbors=best_k)
+    knn_model.fit(X_train, y_train)
+    y_pred = knn_model.predict(X_test)
+    
+    # Evaluate final model
+    logging.info(f"Final Model Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+    logging.info("Classification Report:\n" + classification_report(y_test, y_pred))
+    logging.info("Confusion Matrix:\n" + str(confusion_matrix(y_test, y_pred)))
+    visualize_knn_decision_boundary(knn_model, X_train, X_test, y_test)
+    
+def visualize_knn_decision_boundary(model, X_train, X_test, y_test):
+    """
+    Visualizes the KNN decision boundary for the first two principal components.
+    """
+    # Use PCA to reduce the data to 2 dimensions
+    pca = PCA(n_components=2)
+    X_train_reduced = pca.fit_transform(X_train)
+    X_test_reduced = pca.transform(X_test)
+
+    # Create a meshgrid for plotting the decision boundaries
+    x_min, x_max = X_train_reduced[:, 0].min() - 1, X_train_reduced[:, 0].max() + 1
+    y_min, y_max = X_train_reduced[:, 1].min() - 1, X_train_reduced[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), 
+                         np.linspace(y_min, y_max, 100))
+
+    # Transform the meshgrid points into the same space as the training data
+    meshgrid_points = np.c_[xx.ravel(), yy.ravel()]
+
+    # Inverse transform the meshgrid points using PCA
+    meshgrid_points_pca = pca.inverse_transform(meshgrid_points)
+    
+    # Scale the meshgrid points using the same scaler used for training
+    meshgrid_points_scaled = StandardScaler().fit(X_train).transform(meshgrid_points_pca)
+    
+    # Predict using the model (trained on the original feature space)
+    Z = model.predict(meshgrid_points_scaled)
+    Z = Z.reshape(xx.shape)
+
+    # Plot the decision boundaries
+    plt.contourf(xx, yy, Z, alpha=0.3, cmap=plt.cm.coolwarm)
+
+
+    # Plot the test points (in the reduced 2D space)
+    scatter =plt.scatter(X_test_reduced[:, 0], X_test_reduced[:, 1], c=y_test, marker='o', edgecolor='k', cmap=plt.cm.coolwarm, label='', alpha=0.8)
+    
+    plt.legend(handles=scatter.legend_elements()[0], labels=['Ham', 'Spam'], title="Classes")
+
+    plt.title(f"KNN Decision Boundary with k={model.n_neighbors}")
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
     plt.show()
-#
+
+
+
+
+
+def main():
+    """Main function to load data, train the K-NN model, and evaluate it."""
+    logging.info("Loading data...")
+    X, y = load_and_prepare_data()
+    logging.info("Training K-NN model...")
+    train_and_evaluate_model(X, y)
+    
 
 #%% MAIN CODE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def main():
-    df = pd.read_csv("data_features.csv")
-    target = df["TARGET"]
-   
-    df_features = df.drop(columns=["SAMPLE ID", "TARGET"])
-    col_labels = df.columns.tolist()
-    
-    #Split into train/val/testing
-    X_Train, Y_Train, X_Val, Y_Val, X_Test, Y_Test = splitData(df_features, target)
-    
-    #Create Model
-    #model = KNeighborsClassifier(getBestK(X_Train, Y_Train, X_Val, Y_Val))
-    model = KNeighborsClassifier(3)
-    model.fit(X_Train.values, Y_Train)
-    y_pred = model.predict(X_Test.values)
-    
-    print("Accuracy: ", metrics.accuracy_score(Y_Test, y_pred))
-    
-    plot_pred(X_Test, y_pred, Y_Test, 'KNN')
-    plotPerformanceScores(Y_Test, y_pred, 'KNN')
-    plotROC(Y_Test, model.predict_proba(X_Test)[:, 1], 'KNN')
-#
-
+#Main code start here
 #%% SELF-RUN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Main Self-run block
 if __name__ == "__main__":
-    print(f"\"{module_name}\" module begins.")
-    
+    logging.info(f'"{module_name}" module begins.')
     main()

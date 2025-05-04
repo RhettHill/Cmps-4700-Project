@@ -2,16 +2,21 @@
 # Date Last Updated: 02-26-2025
 
 #%% MODULE BEGINS
-module_name = 'spam_detection'
+module_name = 'spam_detection_model_training'
 '''
 Version: v0.1
 Description:
+This module loads the preprocessed email data, splits it into training and testing sets,
+trains a Support Vector Machine (SVM) classifier, and evaluates its performance.
 Authors:
-Rhett Hill, Zachary Gros
+<Your Name>
 Date Created : 02-26-2025
-Date Last Updated: 04-03-2025
+Date Last Updated: 02-26-2025
 Doc:
-This module loads email data, preprocesses it, and extracts features.
+Loads the CSV with TF-IDF features, converts the TARGET column into binary labels,
+and runs model training and evaluation.
+Notes:
+Uses scikit-learn for ML tasks.
 '''
 
 #%% IMPORTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -19,178 +24,71 @@ if __name__ == "__main__":
     import os
 
 import pandas as pd
-import re
+import numpy as np
+from copy import deepcopy as dpcpy
+
+# Sklearn imports for model building and evaluation
 from sklearn.model_selection import train_test_split
-from sklearn import metrics
-from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Activation
-from sklearn.metrics import classification_report, confusion_matrix, r2_score, ConfusionMatrixDisplay, roc_curve, roc_auc_score
-
-from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 #%% CONSTANTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-DATA_PATH = "Data/enron1" #Change enron 1-6 to process different dataset
-
-#%% INITIALIZATIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-email_data = []  # To store extracted emails and labels
+DATA_CSV = "processed_emails.csv"  # Path to the processed CSV file
 
 #%% FUNCTION DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def load_emails():
-    '''
-    Reads emails from the Enron dataset and formats them into SAMPLE ID, TARGET, and raw text.
-    '''
-    global email_data
-    sample_id = 1
+def load_and_prepare_data():
+    """
+    Loads the processed email data from CSV,
+    converts TARGET to binary (0 for ham, 1 for spam),
+    and splits into features (X) and labels (y).
+    """
+    # Load CSV file
+    df = pd.read_csv(DATA_CSV)
+    
+    # Extract features and target; drop 'SAMPLE ID'
+    X = df.drop(["SAMPLE ID", "TARGET"], axis=1)
+    
+    # Convert TARGET to binary: ham -> 0, spam -> 1
+    y = df["TARGET"].map({"ham": 0, "spam": 1})
+    
+    return X, y
 
-    for label in ["ham", "spam"]:
-        label_path = os.path.join(DATA_PATH, label)
-
-        if os.path.exists(label_path):
-            for file in os.listdir(label_path):
-                file_path = os.path.join(label_path, file)
-                try:
-                    with open(file_path, "r", encoding="latin-1") as f:
-                        email_content = f.read()
-                    email_data.append([sample_id, label, email_content])
-                    sample_id += 1
-                #
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
-                #
-            #
-        #
-    #
-#
-
-def preprocess_text(text):
-    '''
-    Cleans email text by removing special characters, numbers, and stopwords.
-    '''
-    text = text.lower()
-    text = re.sub(r'\W+', ' ', text)  # Remove special characters
-    text = re.sub(r'\d+', '', text)   # Remove numbers
-    return text.strip()
-#
-
-def plot_pca(X, y):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=y,  alpha=0.7)
-    plt.title("PCA Projection of Emails")
-    plt.xlabel("Principal Component 1")
-    plt.ylabel("Principal Component 2")
-    plt.legend(title="Class")
-    plt.show()
-#
-def plot_pred(X, y_p, y_t, type):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
+def train_and_evaluate_model(X, y):
+    """
+    Splits the data into training and test sets, trains an SVM classifier,
+    and prints out the accuracy, classification report, and confusion matrix.
+    """
+    # Split data (80% train, 20% test)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    df = pd.DataFrame({'x': X_pca[:, 0], 'y': X_pca[:, 1], 'LABEL': y_p, 'TARGET': y_t})
+    # Initialize and train the SVM classifier (using a linear kernel)
+    svm_model = SVC(kernel='linear', random_state=42)
+    svm_model.fit(X_train, y_train)
     
-    plt.figure(figsize=(8, 6))
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'ham')]['y'], color='blue', marker='o', label='True Ham', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'ham') & (df['TARGET'] == 'spam')]['y'], color='blue', marker='^', label='False Ham', alpha=0.6)
-
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'ham')]['y'], color='orange', marker='^', label='False Spam', alpha=0.6)
-    plt.scatter(df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['x'], df[(df['LABEL'] == 'spam') & (df['TARGET'] == 'spam')]['y'], color='orange', marker='o', label='True Spam', alpha=0.6)
-    plt.legend(title="Class")
-    plt.title(f"Predicted Classes ({type})")
-    plt.show()
-#
-
-def calculatePerformanceScores(cm):
-    TN, FP, FN, TP = cm.ravel()
+    # Predict on test set
+    y_pred = svm_model.predict(X_test)
     
-    sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
-    specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
-    accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) != 0 else 0
-    precision = TP / (TP + FP) if (TP + FP) != 0 else 0
-    F1 = (2 * (precision * sensitivity)) / (precision + sensitivity) if (precision + sensitivity) != 0 else 0
+    # Evaluate the model
+    acc = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
     
-    return sensitivity, specificity, accuracy, F1
-#
-
-def plotPerformanceScores(Y_Test, Y_pred, type):
-    cm = confusion_matrix(Y_Test, Y_pred, labels=['ham', 'spam'])
-    sensitivity, specificity, accuracy, f1 = calculatePerformanceScores(cm)
-    
-    scores = {'Accuracy': round(accuracy, 4), 'Recall (Sensitivity)': round(sensitivity, 4), 'Specificity': round(specificity, 4), 'F1-Score': round(f1, 4)}
-    
-    def addLabels(x, y):
-        for i in range(len(x)):
-            plt.text(i, y[i] + .01, y[i])
-        #
-    #
-    
-    plt.bar(scores.keys(), scores.values())
-    plt.title(f"Performance Scores for {type}")
-    addLabels(scores.keys(), list(scores.values()))
-    plt.show()
-    
-    m = ConfusionMatrixDisplay(cm, display_labels=['ham', 'spam'])
-    m.plot()
-    plt.show()
-#
-
-def plotROC(Y_Test, prob, type):
-    map = {'ham': 1, 'spam': 0}
-    Y = Y_Test.map(lambda s: map.get(s) if s in map else s)
-    
-    fpr, tpr, thresholds = roc_curve(Y, prob)
-    roc_auc = roc_auc_score(Y, prob)
-    
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random guess')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f"Receiver Operating Characteristic (ROC) Curve for {type}")
-    plt.legend(loc='lower right')
-    plt.show()
-#
+    print("Model Accuracy:", acc)
+    print("\nClassification Report:\n", report)
+    print("\nConfusion Matrix:\n", cm)
 
 #%% MAIN CODE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def main():
-    df = pd.read_csv("data_features.csv")
-    target = df["TARGET"]
-   
-    df_features = df.drop(columns=["SAMPLE ID", "TARGET"])
-    col_labels = df.columns.tolist()
+    """
+    Main function to load data, train the SVM model, and evaluate its performance.
+    """
+    print("Loading and preparing data...")
+    X, y = load_and_prepare_data()
     
-    #Split into train/testing
-    X_Train, X_Test, Y_Train, Y_Test = train_test_split(df_features, target, test_size=0.3, random_state=1)
-    
-    #SVM
-    LinSVC = LinearSVC(penalty='l2', C=10.0)
-    
-    LinSVC = LinSVC.fit(X_Train, Y_Train)
-    pred = LinSVC.predict(X_Test)
-    
-    print(pred)
-    plot_pred(X_Test, pred, Y_Test, 'SVM')
-    
-    plotPerformanceScores(Y_Test, pred, 'SVM')
-    plotROC(Y_Test, LinSVC._predict_proba_lr(X_Test)[:, 1], 'SVM')
-#
+    print("Training and evaluating the SVM model...")
+    train_and_evaluate_model(X, y)
 
 #%% SELF-RUN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
     print(f"\"{module_name}\" module begins.")
-    
     main()
-    
-    
-#EPOC vs ERROR curve
-#Interpretation of plots
-
-#Interpretation of performance scores
