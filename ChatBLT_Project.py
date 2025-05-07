@@ -75,6 +75,9 @@ def load_emails():
             #
         #
     #
+    
+    df = pd.DataFrame(email_data, columns=["SAMPLE ID", "TARGET", "TEXT"])
+    df.to_csv("INPUT/Data.csv", index=False)
 #
 
 def preprocess_text(text):
@@ -569,10 +572,11 @@ def main():
     Main function to load emails and preprocess them into structured data.
     '''
     print("Loading emails...")
-    load_emails()
+    if os.path.isfile("INPUT/Data.csv") == False:
+        load_emails()
+    #
 
-    df = pd.DataFrame(email_data, columns=["SAMPLE ID", "TARGET", "TEXT"])
-    df.to_csv("OUTPUT/data_raw.csv", index=False)
+    df = pd.read_csv("INPUT/Data.csv")
 
     plot_text(df, "RAW")
     plt.close()
