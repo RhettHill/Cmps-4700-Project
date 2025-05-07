@@ -368,6 +368,7 @@ def ANN(X_train, y_train, X_val, y_val, X_test, y_test):
 #
 
 def SVM(X_train, y_train, X_val, y_val, X_test, y_test):
+    #We use the default C value of 1.0 since it performed great for our data
     model = SVC(kernel='linear', random_state=42, probability=True)
     model.fit(X_train, y_train)
     
